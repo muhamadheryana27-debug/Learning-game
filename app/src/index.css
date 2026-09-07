@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --text: #1a202c;
+  --text-h: #1a365d;
+  --bg: #f7fafc;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}

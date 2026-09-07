@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+app/node_modules/
+app/dist/
+dist/
+*.log
+npm-debug.log*
+
+# Env
+.env
+app/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Supabase
+.supabase/
+
+# Assets large (keep source png but allow)
+# Vercel
+.vercel/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
