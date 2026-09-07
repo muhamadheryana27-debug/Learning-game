@@ -6,7 +6,7 @@ export const onboardingSchema = z.object({
     .min(3, "Nama minimal 3 karakter")
     .max(60, "Nama maksimal 60 karakter")
     .regex(/^[A-Za-z\s'.-]+$/, "Nama hanya huruf, spasi, titik, petik, strip"),
-  class: z.enum(["VIII-A", "VIII-B", "VIII-C", "VIII-D"]),
+  class: z.enum(["VIII-A", "VIII-B", "VIII-C", "VIII-D", "VIII-E", "VIII-F", "VIII-G", "VIII-H"]),
   absen: z.coerce.number().int().min(1).max(40),
 });
 
