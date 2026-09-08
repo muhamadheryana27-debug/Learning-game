@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PIPELINE_ROUTES, traceRoute, type Shape } from "../../engine/rules/doughFactoryEngine";
 import { useProgressStore } from "../../store/useProgressStore";
+import { useStudentStore } from "../../store/useStudentStore";
+import { sendModuleActivity } from "../../engine/sync/syncModuleActivity";
+import { createSeededRandom } from "../../core/engine/random";
 import { toast } from "sonner";
 
 const PASTRY_META: Record<Shape, { icon: string; label: string; color: string }> = {
@@ -50,17 +53,25 @@ function PastryIcon({ shape, size = 40 }: { shape: Shape; size?: number }) {
   );
 }
 
+const PUFF_OFFSETS = [
+  { dx: -3, dy: -22 },
+  { dx: 5, dy: -28 },
+  { dx: -1, dy: -34 },
+  { dx: 7, dy: -40 },
+  { dx: 3, dy: -46 },
+];
+
 function Puff({ show }: { show: boolean }) {
   return (
     <AnimatePresence>
       {show && (
         <>
-          {[...Array(5)].map((_, i) => (
+          {PUFF_OFFSETS.map((off, i) => (
             <motion.div
               key={i}
               className="absolute w-3 h-3 md:w-4 md:h-4 rounded-full bg-white/90 blur-[1px] border border-white"
               initial={{ scale: 0.2, opacity: 0.9, x: 0, y: 0 }}
-              animate={{ scale: [0.2, 1.4, 0], opacity: [0.9, 0.6, 0], x: (i - 2) * 8 + (Math.random() * 6 - 3), y: -14 - i * 6 - Math.random() * 8 }}
+              animate={{ scale: [0.2, 1.4, 0], opacity: [0.9, 0.6, 0], x: off.dx, y: off.dy }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.7, delay: i * 0.06, ease: "easeOut" }}
               style={{ left: "50%", top: "50%" }}
@@ -93,22 +104,24 @@ const CHEF_QUOTES: Record<Shape, string> = {
   Triangle: "Mau Cheesecake 🍰 ya!",
   Circle: "",
 };
-function randomWant(): Shape {
-  const arr: Shape[] = ["Square", "Triangle"];
-  return arr[Math.floor(Math.random() * 2)];
-}
-
 const MAX_CUSTOMERS = 5;
 const INGREDIENTS: Shape[] = ["Square", "Triangle", "Circle"];
 type GameState = "playing" | "completed";
 
+function generateQueue(seed: string, count: number): Shape[] {
+  const rand = createSeededRandom(seed);
+  const targets: Shape[] = ["Square", "Triangle"];
+  return Array.from({ length: count }, () => targets[Math.floor(rand() * targets.length)]);
+}
+
 export const DoughFactory: React.FC = () => {
-  const setMod1Score = useProgressStore((s) => s.setMod1Score);
+  const setModuleScore = useProgressStore((s) => s.setModuleScore);
+  const student = useStudentStore((s) => s.student);
   const [score, setScore] = useState(0);
   const [level, setLevel] = useState(1);
   const [paused, setPaused] = useState(false);
   const [selectedShape, setSelectedShape] = useState<Shape>("Square");
-  const [queue, setQueue] = useState<Shape[]>(() => Array.from({ length: MAX_CUSTOMERS }, () => randomWant()));
+  const [queue, setQueue] = useState<Shape[]>(() => generateQueue(`mod1-${student?.studentId ?? "anon"}`, MAX_CUSTOMERS));
   const [served, setServed] = useState(0);
   const [queueOpen, setQueueOpen] = useState(false);
   const [activeDoor, setActiveDoor] = useState<number | null>(null);
@@ -179,7 +192,7 @@ export const DoughFactory: React.FC = () => {
             setScore((p) => p + 100);
             const nextServed = served + 1;
             setServed(nextServed);
-            setMod1Score(Math.min(100, 60 + nextServed * 10));
+            setModuleScore("mod1", Math.min(100, 60 + nextServed * 10));
             const isLast = nextServed >= MAX_CUSTOMERS;
             toast.success(isLast ? `Selesai! ${MAX_CUSTOMERS}/${MAX_CUSTOMERS} 🎉` : `Pesanan tepat! +100 🎉`, { description: `${PASTRY_META[final].icon} ${PASTRY_META[final].label} disajikan!` });
             setTimeout(() => {
@@ -205,6 +218,20 @@ export const DoughFactory: React.FC = () => {
   const stationsToShow = activeDoor ? PIPELINE_ROUTES[activeDoor].map((g) => g.id) : [];
 
   if (isFinished) {
+    const handleSaveActivity = async () => {
+      if (!student) { toast.error("Data siswa tidak ditemukan"); return; }
+      const res = await sendModuleActivity({
+        name: student.name,
+        className: student.className,
+        attendanceNumber: student.attendanceNumber,
+        module: "mod1",
+        score,
+        details: `${served}/${MAX_CUSTOMERS} pelanggan, Level ${level}`,
+        status: "completed",
+      });
+      toast.success(res.ok ? "Aktivitas Modul 1 tersimpan!" : "Gagal menyimpan — coba lagi");
+    };
+
     return (
       <div className="w-full max-w-6xl mx-auto px-2 sm:px-3 md:px-0 pb-[160px] md:pb-0">
         <div className="bg-white rounded-2xl md:rounded-[1.5rem] border-2 md:border-[3px] border-amber-200 shadow-xl p-6 sm:p-8 md:p-10 flex flex-col items-center justify-center min-h-[300px] md:min-h-[400px]">
@@ -230,6 +257,15 @@ export const DoughFactory: React.FC = () => {
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="text-xs text-slate-400 mt-4">
             Kembali ke peta untuk melanjutkan...
           </motion.p>
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2 }}
+            onClick={handleSaveActivity}
+            className="mt-4 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-full shadow-lg active:scale-95 transition text-sm"
+          >
+            💾 Simpan Aktivitas Modul 1
+          </motion.button>
         </div>
       </div>
     );

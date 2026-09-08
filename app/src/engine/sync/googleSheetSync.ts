@@ -2,7 +2,10 @@
  * Google Apps Script Sync — CORS-safe via `mode: 'no-cors'`
  * Payload spec:
  * {
- *   name, class, absen, mod1_score, mod2_score, water_correct, reasoning, status
+ *   name, class, absen,
+ *   mod1_score, mod2_score, water_correct, final_score,
+ *   pattern_recognition, algorithmic_thinking, debugging_skill, abstraction, decomposition,
+ *   hints_used, debugging_attempts, reasoning, status
  * }
  * ENV: VITE_GOOGLE_APPS_SCRIPT_URL
  */
@@ -17,14 +20,24 @@ export type GoogleReportPayload = {
   mod1_score: number;
   mod2_score: number;
   water_correct: boolean;
+  final_score: number;
+  // CT Skills
+  pattern_recognition: number;
+  algorithmic_thinking: number;
+  debugging_skill: number;
+  abstraction: number;
+  decomposition: number;
+  // Activity
+  hints_used: number;
+  debugging_attempts: number;
   reasoning: string;
   status: "completed";
 };
 
 export type StudentProfileInput = {
   name: string;
-  class: string;
-  absen: number;
+  className: string;
+  attendanceNumber: number;
   reasoningText: string;
 };
 
@@ -32,6 +45,14 @@ export type ScoresInput = {
   mod1: number;
   mod2: number;
   water_correct: boolean;
+  final_score: number;
+  hints_used: number;
+  debugging_attempts: number;
+  pattern_recognition: number;
+  algorithmic_thinking: number;
+  debugging_skill: number;
+  abstraction: number;
+  decomposition: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -50,11 +71,19 @@ export function buildGoogleReportPayload(
 ): GoogleReportPayload {
   return {
     name: studentProfile.name,
-    class: studentProfile.class,
-    absen: studentProfile.absen,
+    class: studentProfile.className,
+    absen: studentProfile.attendanceNumber,
     mod1_score: scores.mod1,
     mod2_score: scores.mod2,
     water_correct: scores.water_correct,
+    final_score: scores.final_score,
+    pattern_recognition: scores.pattern_recognition,
+    algorithmic_thinking: scores.algorithmic_thinking,
+    debugging_skill: scores.debugging_skill,
+    abstraction: scores.abstraction,
+    decomposition: scores.decomposition,
+    hints_used: scores.hints_used,
+    debugging_attempts: scores.debugging_attempts,
     reasoning: studentProfile.reasoningText,
     status: "completed",
   };
@@ -137,6 +166,45 @@ export async function submitReport(payload: GoogleReportPayload): Promise<{ queu
     // Network failure → queue for retry
     enqueuePendingReport(payload);
     return { queued: true };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-module activity tracking
+// ---------------------------------------------------------------------------
+export type ModuleActivityPayload = {
+  name: string;
+  className: string;
+  attendanceNumber: number;
+  module: "mod1" | "mod2";
+  score: number;
+  details: string;
+  status: "in_progress" | "completed";
+};
+
+export async function sendModuleActivity(payload: ModuleActivityPayload): Promise<{ ok: boolean }> {
+  const url = WEBHOOK_URL;
+  if (!url) return { ok: false };
+
+  try {
+    await fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: payload.name,
+        class: payload.className,
+        absen: payload.attendanceNumber,
+        module: payload.module,
+        score: payload.score,
+        details: payload.details,
+        status: payload.status,
+        _type: "module_activity",
+      }),
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false };
   }
 }
 

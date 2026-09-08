@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useStudentStore } from "../store/useStudentStore";
-import { supabase, isSupabaseConfigured } from "../lib/supabase";
-import { enqueue } from "../engine/sync/offlineQueue";
+import { gameApi } from "../services/api";
+import { enqueue } from "../engine/sync/syncEngine";
 import { toast } from "sonner";
 
 const CLASSES = ["VIII-A", "VIII-B", "VIII-C", "VIII-D", "VIII-E", "VIII-F", "VIII-G", "VIII-H"] as const;
@@ -37,25 +37,25 @@ export default function Briefing() {
       return;
     }
 
-    const data = { name: trimmedName, class: kelas, absen: absenNum };
     setLoading(true);
-    setStudent(data as any);
+    setStudent({ name: trimmedName, className: kelas, attendanceNumber: absenNum });
 
-    if (isSupabaseConfigured) {
-      try {
-        const { data: existing } = await supabase.from("students").select("id").eq("name", data.name).eq("class", data.class).eq("absen", data.absen).maybeSingle();
-        if (!existing) {
-          const { error } = await supabase.from("students").insert({ name: data.name, class: data.class, absen: data.absen });
-          if (error) throw error;
-        }
-        toast.success("Kartu detektif jadi! 🚀");
-      } catch {
-        await enqueue("students", data);
-        toast.info("Offline — kartu disimpan lokal, akan sync nanti");
-      }
+    const studentId = `${kelas}-${String(absenNum).padStart(2, "0")}-${trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+
+    const result = await gameApi.registerStudent({
+      studentId,
+      name: trimmedName,
+      className: kelas,
+      attendanceNumber: absenNum,
+    });
+
+    if (result.ok) {
+      toast.success("Kartu detektif jadi! 🚀");
     } else {
-      toast.success("Kartu detektif jadi! 🚀 (mode offline)");
+      await enqueue("register_student", "", studentId, { studentId, name: trimmedName, className: kelas, attendanceNumber: absenNum });
+      toast.info("Offline — kartu disimpan lokal, akan sync nanti");
     }
+
     setLoading(false);
     nav("/hub");
   };
@@ -170,7 +170,7 @@ export default function Briefing() {
                 <label className="block text-xs font-bold text-amber-300 mb-1.5 tracking-wide">Kelas *</label>
                 <select
                   value={kelas}
-                  onChange={(e) => setKelas(e.target.value as any)}
+                  onChange={(e) => setKelas(e.target.value as (typeof CLASSES)[number])}
                   className="w-full bg-white border-2 border-slate-300 rounded-xl px-3 sm:px-4 py-3 min-h-[48px] text-sm font-bold text-slate-900 focus:border-amber-400 focus:ring-4 focus:ring-amber-400/20 outline-none transition"
                 >
                   {CLASSES.map((c) => (

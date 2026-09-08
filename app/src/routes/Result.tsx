@@ -3,21 +3,26 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useStudentStore } from "../store/useStudentStore";
 import { useProgressStore } from "../store/useProgressStore";
-import { computeFinalScore } from "../engine/scoring/scoring";
+import { computeFinalScore, computeCTSkills } from "../engine/scoring/scoring";
 import { Card } from "../components/shared/Card";
 import { Button, SecondaryButton } from "../components/shared/Button";
 import {
   buildGoogleReportPayload,
   submitReport,
   isReportSent,
-  initGoogleSheetAutoSync,
-  syncPendingReports,
-} from "../engine/sync/googleSheetSync";
+  flushHandler,
+} from "../engine/sync/reportSync";
+import { initAutoSync, flushQueue } from "../engine/sync/syncEngine";
 
 export default function Result() {
   const nav = useNavigate();
   const student = useStudentStore((s) => s.student);
-  const { mod1Score, mod2Score, waterCorrect, hintsUsed, debuggingAttempts, reasoning } = useProgressStore();
+  const { modules, waterCorrect } = useProgressStore();
+  const mod1Score = modules.mod1?.score ?? 0;
+  const mod2Score = modules.mod2?.score ?? 0;
+  const hintsUsed = (modules.mod1?.hintsUsed ?? 0) + (modules.mod2?.hintsUsed ?? 0);
+  const reasoning = modules.mod2?.reasoning ?? "";
+  const debuggingAttempts = (modules.mod1?.attempts ?? 0) + (modules.mod2?.attempts ?? 0);
   const finalScore = computeFinalScore(mod1Score, mod2Score, hintsUsed);
   const reflectionRaw = localStorage.getItem("vect-reflection");
   const reflection: { essay?: string; correct?: number } | null = reflectionRaw ? JSON.parse(reflectionRaw) : null;
@@ -29,13 +34,15 @@ export default function Result() {
 
   // Offline retry queue: auto-sync pending reports when internet returns
   useEffect(() => {
-    const cleanup = initGoogleSheetAutoSync((count) => {
-      toast.success(`🎉 ${count} laporan tertunda berhasil terkirim!`);
-      setSent(true);
+    const cleanup = initAutoSync(async (job) => {
+      if (job.type === "google_report") {
+        return flushHandler(job);
+      }
+      return false;
     });
     // Also attempt immediate flush if online and has pending
     if (navigator.onLine) {
-      void syncPendingReports().then((count) => {
+      void flushQueue(flushHandler).then((count) => {
         if (count > 0) {
           toast.success(`🎉 ${count} laporan tertunda berhasil terkirim!`);
           setSent(true);
@@ -52,19 +59,38 @@ export default function Result() {
     setSending(true);
     toast.loading("Mengirim laporan ke Google Sheets...");
 
+    // Compute CT skills for the payload
+    const reflectionCorrect = reflection?.correct ?? 0;
+    const ctSkills = computeCTSkills({
+      mod1Score,
+      mod2Assignments: {},
+      hintsUsed,
+      debuggingAttempts,
+      reflectionCorrect,
+      experimentChecklistCorrect: 0,
+    });
+
     // Construct payload per spec
     const reasoningText = reasoning || reflection?.essay || "";
     const payload = buildGoogleReportPayload(
       {
         name: student.name,
-        class: student.class,
-        absen: student.absen,
+        className: student.className,
+        attendanceNumber: student.attendanceNumber,
         reasoningText,
       },
       {
         mod1: mod1Score,
         mod2: mod2Score,
         water_correct: waterCorrect,
+        final_score: finalScore,
+        hints_used: hintsUsed,
+        debugging_attempts: debuggingAttempts,
+        pattern_recognition: ctSkills.patternRecognition,
+        algorithmic_thinking: ctSkills.algorithmicThinking,
+        debugging_skill: ctSkills.debugging,
+        abstraction: ctSkills.abstraction,
+        decomposition: ctSkills.decomposition,
       },
     );
 

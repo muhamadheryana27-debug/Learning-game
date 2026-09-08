@@ -7,7 +7,7 @@ import { HelpModal } from "../components/shared/HelpModal";
 
 export default function Module1() {
   const nav = useNavigate();
-  const mod1Score = useProgressStore((s) => s.mod1Score);
+  const mod1Score = useProgressStore((s) => s.modules.mod1?.score ?? 0);
 
   return (
     <div className="min-h-screen bg-muted p-4">

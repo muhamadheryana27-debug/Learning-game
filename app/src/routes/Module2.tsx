@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FEATURES, EXPERIMENTS, scoreModule2, isWaterCorrect } from "../engine/rules/fertilizerEngine";
 import { useProgressStore } from "../store/useProgressStore";
+import { useStudentStore } from "../store/useStudentStore";
+import { sendModuleActivity } from "../engine/sync/syncModuleActivity";
 import { Card } from "../components/shared/Card";
 import { Button, SecondaryButton } from "../components/shared/Button";
 import { FlowerSVG } from "../components/shared/FlowerSVG";
@@ -33,10 +35,13 @@ function propsFromGlasses(glasses: string[], assignments: Record<string, string>
 
 export default function Module2() {
   const nav = useNavigate();
-  const { setMod2, setReasoning, setExperimentAnswer, reasoning, assignments: saved, mod2IntroCompleted, _hasHydrated } = useProgressStore();
+  const student = useStudentStore((s) => s.student);
+  const { modules, assignments: saved, setModuleScore, setModuleReasoning, setExperimentAnswer, setWaterCorrect, setAssignments, _hasHydrated } = useProgressStore();
   const { selectedBeakers, addBeaker, removeBeaker, clearBeakers, currentFlowerState, animationPhase, isAnalyzing, evaluateMixture, discoveredTraits } =
     useLabStore();
-  const [assignments, setAssignments] = useState<Record<string, string>>(saved);
+  const reasoning = modules.mod2?.reasoning ?? "";
+  const mod2IntroCompleted = modules.mod2?.introCompleted ?? false;
+  const [localAssignments, setLocalAssignments] = useState<Record<string, string>>(saved);
   const [reasoningLocal, setReasoningLocal] = useState(reasoning);
   const [, setExpChecks] = useState<Record<number, string[]>>({});
 
@@ -54,18 +59,36 @@ export default function Module2() {
   };
 
   const save = () => {
-    if (Object.keys(assignments).length < 6) { toast.error("Assign 6 gelas dulu (A–F)"); return; }
+    if (Object.keys(localAssignments).length < 6) { toast.error("Assign 6 gelas dulu (A–F)"); return; }
     if (reasoningLocal.trim().length < 20) { toast.error("Tulis penalaran minimal 20 karakter"); return; }
-    const sc = scoreModule2(assignments);
-    const water = isWaterCorrect(assignments);
-    setMod2(assignments, sc, water);
-    setReasoning(reasoningLocal);
+    const sc = scoreModule2(localAssignments);
+    const water = isWaterCorrect(localAssignments);
+    setModuleScore("mod2", sc);
+    setWaterCorrect(water);
+    setAssignments(localAssignments);
+    setModuleReasoning("mod2", reasoningLocal);
     toast.success(`Jawaban disimpan! Skor M2: ${sc}% • Air benar: ${water ? "YES" : "NO"}`);
     nav("/hub");
   };
 
+  const handleSaveActivity = async () => {
+    if (!student) { toast.error("Data siswa tidak ditemukan"); return; }
+    const sc = scoreModule2(localAssignments);
+    const water = isWaterCorrect(localAssignments);
+    const res = await sendModuleActivity({
+      name: student.name,
+      className: student.className,
+      attendanceNumber: student.attendanceNumber,
+      module: "mod2",
+      score: sc,
+      details: `Air: ${water ? "Benar" : "Salah"}, Gelas: ${Object.keys(localAssignments).length}/6`,
+      status: Object.keys(localAssignments).length >= 6 ? "completed" : "in_progress",
+    });
+    toast.success(res.ok ? "Aktivitas Modul 2 tersimpan!" : "Gagal menyimpan — coba lagi");
+  };
+
   const handleDeductionComplete = (deducedAssignments: Record<string, string>) => {
-    setAssignments(deducedAssignments);
+    setLocalAssignments(deducedAssignments);
     toast.success("Deduksi selesai! Sekarang verifikasi dan simpan jawabanmu.");
   };
 
@@ -175,8 +198,8 @@ export default function Module2() {
           <div className="grid md:grid-cols-3 gap-4">
             {EXPERIMENTS.map((exp) => {
               const flowerProps =
-                Object.keys(assignments).length >= 3
-                  ? propsFromGlasses(exp.glasses, assignments)
+                Object.keys(localAssignments).length >= 3
+                  ? propsFromGlasses(exp.glasses, localAssignments)
                   : { hasLeaves: false, petalColor: "default" as const, petalLayers: 1 as const, stemType: "normal" as const, centerColor: "default" as const };
               return (
                 <div key={exp.id} className="border rounded-card p-3 bg-white flex flex-col">
@@ -207,6 +230,9 @@ export default function Module2() {
           <label className="block font-medium mb-1">Tuliskan alasan / penalaran logika kamu (min 20 karakter) *</label>
           <textarea value={reasoningLocal} onChange={(e) => setReasoningLocal(e.target.value)} rows={4} className="w-full border-2 border-muted rounded-lg p-3 focus:border-accent outline-none" placeholder="Saya menemukan pola: gelas C=Putih muncul di EXP1 & EXP3, gelas A=Ganda muncul di EXP1 & EXP2, jadi gelas D=Air..." />
           <Button onClick={save} className="w-full mt-3">Simpan Jawaban Modul 2</Button>
+          <button onClick={handleSaveActivity} className="w-full mt-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg shadow active:scale-95 transition text-sm">
+            💾 Simpan Aktivitas Modul 2
+          </button>
         </Card>
       </div>
     </div>

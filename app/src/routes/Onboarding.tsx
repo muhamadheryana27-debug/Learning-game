@@ -5,8 +5,8 @@ import { onboardingSchema, type OnboardingData } from "../lib/validation";
 import { useStudentStore } from "../store/useStudentStore";
 import { Card } from "../components/shared/Card";
 import { Button } from "../components/shared/Button";
-import { supabase, isSupabaseConfigured } from "../lib/supabase";
-import { enqueue } from "../engine/sync/offlineQueue";
+import { gameApi } from "../services/api";
+import { enqueue } from "../engine/sync/syncEngine";
 import { toast } from "sonner";
 
 export default function Onboarding() {
@@ -19,22 +19,22 @@ export default function Onboarding() {
 
   const onSubmit = async (data: unknown) => {
     const parsed = data as OnboardingData;
-    setStudent(parsed);
-    // Simpan ke Supabase jika tersedia, else queue
-    if (isSupabaseConfigured) {
-      try {
-        const { data: existing } = await supabase.from("students").select("id").eq("name", parsed.name).eq("class", parsed.class).eq("absen", parsed.absen).maybeSingle();
-        if (!existing) {
-          const { error } = await supabase.from("students").insert({ name: parsed.name, class: parsed.class, absen: parsed.absen });
-          if (error) throw error;
-        }
-        toast.success("Identitas tersimpan di Supabase");
-      } catch {
-        await enqueue("students", parsed);
-        toast.info("Offline — identitas disimpan lokal, akan sync nanti");
-      }
+    setStudent({ name: parsed.name, className: parsed.class, attendanceNumber: parsed.absen });
+
+    const studentId = `${parsed.class}-${String(parsed.absen).padStart(2, "0")}-${parsed.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+
+    const result = await gameApi.registerStudent({
+      studentId,
+      name: parsed.name,
+      className: parsed.class,
+      attendanceNumber: parsed.absen,
+    });
+
+    if (result.ok) {
+      toast.success("Identitas tersimpan");
     } else {
-      toast.success("Identitas tersimpan lokal (Supabase belum dikonfigurasi)");
+      await enqueue("register_student", "", studentId, { studentId, name: parsed.name, className: parsed.class, attendanceNumber: parsed.absen });
+      toast.info("Offline — identitas disimpan lokal, akan sync nanti");
     }
     nav("/hub");
   };

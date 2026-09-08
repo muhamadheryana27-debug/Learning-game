@@ -16,15 +16,6 @@ export default defineConfig({
         display: 'standalone',
         icons: [{ src: 'pwa-192.png', sizes: '192x192', type: 'image/png' }],
       },
-      workbox: {
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: { networkTimeoutSeconds: 3, cacheName: 'supabase-cache' },
-          },
-        ],
-      },
     }),
   ],
 })

@@ -122,7 +122,8 @@ function FruitCard({ id, fruit, isSelected, isPlaced, onSelect, onDragStart, onD
 
 export default function Module2IntroFruit() {
   const nav = useNavigate();
-  const { setMod2IntroCompleted, mod2IntroCompleted, _hasHydrated } = useProgressStore();
+  const { modules, setModuleIntroCompleted, _hasHydrated } = useProgressStore();
+  const mod2IntroCompleted = modules.mod2?.introCompleted ?? false;
   const [questIdx, setQuestIdx] = useState(0);
   const [dropped, setDropped] = useState<Record<ZoneId, FruitId[]>>({ adi: [], both: [], edi: [] });
   const [selected, setSelected] = useState<FruitId | null>(null);
@@ -132,6 +133,7 @@ export default function Module2IntroFruit() {
   const [showSuccess, setShowSuccess] = useState(false);
 
   // If intro was already completed in a previous session (persisted), show celebration immediately
+  /* eslint-disable react/set-state-in-effect */
   useEffect(() => {
     if (_hasHydrated && mod2IntroCompleted && !completed) {
       // Re-hydrate dropped to reflect correct placement for visual completeness
@@ -139,11 +141,13 @@ export default function Module2IntroFruit() {
       setCompleted(true);
     }
   }, [_hasHydrated, mod2IntroCompleted, completed]);
+  /* eslint-enable react/set-state-in-effect */
 
   const currentQuest = QUESTS[questIdx];
 
   // ── Automatic completion: triggers when ALL 4 fruits are correctly placed
   //    regardless of quest order — safety net so students never get stuck
+  /* eslint-disable react/set-state-in-effect */
   useEffect(() => {
     if (completed) return;
     const allCorrect =
@@ -156,10 +160,11 @@ export default function Module2IntroFruit() {
     const totalPlaced = dropped.adi.length + dropped.both.length + dropped.edi.length;
     if (allCorrect && totalPlaced === 4) {
       setCompleted(true);
-      setMod2IntroCompleted();
+      setModuleIntroCompleted("mod2");
       toast.success("🎉 Semua buah tepat! Pemanasan selesai!");
     }
-  }, [dropped, completed, setMod2IntroCompleted]);
+  }, [dropped, completed, setModuleIntroCompleted]);
+  /* eslint-enable react/set-state-in-effect */
 
   const placeFruitWith = useCallback(
     (fruitId: FruitId, zone: ZoneId) => {
@@ -370,7 +375,7 @@ export default function Module2IntroFruit() {
               <span className="text-slate-300">·</span>
               <button
                 onClick={() => {
-                  setMod2IntroCompleted();
+                  setModuleIntroCompleted("mod2");
                   nav("/module/2");
                 }}
                 className="text-slate-400 hover:text-emerald-600 underline underline-offset-2 transition"
