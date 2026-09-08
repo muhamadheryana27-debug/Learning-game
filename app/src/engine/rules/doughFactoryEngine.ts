@@ -24,11 +24,11 @@ export const GATES = {
   k_bot: { id: "k_bot", src: "Circle" as Shape, dst: "Triangle" as Shape, displayLabel: "🍩 ➔ 🍰" },
 } as const;
 
-// FIXED Pipeline Routes — Door 2 reordered to bypass k_bot trap so Donut reachable
-// Fix: Door 2 [g2_top, k_bot, g2_mid, g_shared_midLeft, k_top] — g2_mid (🍰→🍩) now after k_bot, so Donut survives to Exit K
+// Pipeline Routes — Door 2: Donut→Brownie, Cheesecake→Donut, Brownie→Cheesecake, Cheesecake→Brownie, Donut→Cheesecake
+// g2_top (Circle→Square) → g2_mid (Triangle→Circle) → g_shared_midLeft (Square→Triangle) → k_top (Triangle→Square) → k_bot (Circle→Triangle)
 export const PIPELINE_ROUTES: Record<number, GateRule[]> = {
   1: [GATES.g1_top, GATES.g_shared_midLeft, GATES.k_top, GATES.k_bot],
-  2: [GATES.g2_top, GATES.k_bot, GATES.g2_mid, GATES.g_shared_midLeft, GATES.k_top],
+  2: [GATES.g2_top, GATES.g2_mid, GATES.g_shared_midLeft, GATES.k_top, GATES.k_bot],
   3: [GATES.g3_top, GATES.g3_mid, GATES.k_top, GATES.k_bot],
 };
 

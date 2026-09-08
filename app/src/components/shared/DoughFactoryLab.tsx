@@ -91,12 +91,15 @@ const CUSTOMERS_EMOJI = ["👧", "👦", "🧑‍🍳", "👩‍🦰", "🧒", "
 const CHEF_QUOTES: Record<Shape, string> = {
   Square: "Aku mau Brownie 🟫!",
   Triangle: "Mau Cheesecake 🍰 ya!",
-  Circle: "Donat Stroberi 🍩 dong!",
+  Circle: "",
 };
 function randomWant(): Shape {
-  const arr: Shape[] = ["Square", "Triangle", "Circle"];
-  return arr[Math.floor(Math.random() * 3)];
+  const arr: Shape[] = ["Square", "Triangle"];
+  return arr[Math.floor(Math.random() * 2)];
 }
+
+const MAX_CUSTOMERS = 5;
+const INGREDIENTS: Shape[] = ["Square", "Triangle", "Circle"];
 
 export const DoughFactory: React.FC = () => {
   const setMod1Score = useProgressStore((s) => s.setMod1Score);
@@ -104,10 +107,9 @@ export const DoughFactory: React.FC = () => {
   const [level, setLevel] = useState(1);
   const [paused, setPaused] = useState(false);
   const [selectedShape, setSelectedShape] = useState<Shape>("Square");
-  const [queue, setQueue] = useState<Shape[]>(() => [randomWant(), randomWant(), randomWant()]);
+  const [queue, setQueue] = useState<Shape[]>(() => Array.from({ length: MAX_CUSTOMERS }, () => randomWant()));
   const [served, setServed] = useState(0);
   const [queueOpen, setQueueOpen] = useState(false);
-  const activeWant = queue[0];
   const [activeDoor, setActiveDoor] = useState<number | null>(null);
   const [trace, setTrace] = useState<ReturnType<typeof traceRoute> | null>(null);
   const [step, setStep] = useState(0);
@@ -115,6 +117,9 @@ export const DoughFactory: React.FC = () => {
   const [popShape, setPopShape] = useState<Shape | null>(null);
   const [happy, setHappy] = useState(false);
   const timerRef = useRef<number | null>(null);
+
+  const isFinished = served >= MAX_CUSTOMERS && queue.length === 0;
+  const activeWant = queue[0];
 
   const getTokenPos = (): Pos => {
     if (!trace || activeDoor === null) return CHUTE_POS[activeDoor ?? 2];
@@ -132,7 +137,7 @@ export const DoughFactory: React.FC = () => {
   }, []);
 
   const handleChute = (door: number) => {
-    if (animating || paused) return;
+    if (animating || paused || isFinished) return;
     const result = traceRoute(selectedShape, door);
     setActiveDoor(door);
     setTrace(result);
@@ -162,15 +167,14 @@ export const DoughFactory: React.FC = () => {
           if (isWin) {
             setHappy(true);
             setScore((p) => p + 100);
-            setServed((p) => p + 1);
-            setMod1Score(Math.min(100, 60 + (served + 1) * 10));
-            toast.success(`Pesanan tepat! +100 🎉`, { description: `${PASTRY_META[final].icon} ${PASTRY_META[final].label} disajikan!` });
+            const nextServed = served + 1;
+            setServed(nextServed);
+            setMod1Score(Math.min(100, 60 + nextServed * 10));
+            const isLast = nextServed >= MAX_CUSTOMERS;
+            toast.success(isLast ? `Selesai! ${MAX_CUSTOMERS}/${MAX_CUSTOMERS} 🎉` : `Pesanan tepat! +100 🎉`, { description: `${PASTRY_META[final].icon} ${PASTRY_META[final].label} disajikan!` });
             setTimeout(() => {
-              setQueue((q) => {
-                const next = [...q.slice(1), randomWant()];
-                if ((served + 1) % 3 === 0) setLevel((l) => l + 1);
-                return next;
-              });
+              setQueue((q) => q.slice(1));
+              if (!isLast && nextServed % 3 === 0) setLevel((l) => l + 1);
               setHappy(false);
               setTrace(null);
               setActiveDoor(null);
@@ -192,7 +196,7 @@ export const DoughFactory: React.FC = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-2 sm:px-3 md:px-0 pb-[160px] md:pb-0">
-      {/* HUD — responsive */}
+      {/* HUD */}
       <div className="bg-white rounded-2xl md:rounded-[1.5rem] border-2 md:border-[3px] border-amber-200 shadow-xl p-2 sm:p-3 md:p-4 flex flex-wrap items-center justify-between gap-2 md:gap-3 mb-3 md:mb-4">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-400 border-2 border-amber-600 flex items-center justify-center text-lg sm:text-xl shrink-0">🏭</div>
@@ -210,7 +214,9 @@ export const DoughFactory: React.FC = () => {
             <span className="text-[10px] sm:text-xs font-bold text-slate-400">LVL</span>
             <span className="font-black text-amber-300 text-sm sm:text-base">{level}</span>
           </div>
-          <div className="bg-emerald-50 border-2 border-emerald-200 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold text-emerald-700 hidden sm:flex min-h-[40px] sm:min-h-[48px] items-center">✅ {served}</div>
+          <div className="bg-emerald-50 border-2 border-emerald-200 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold text-emerald-700 hidden sm:flex min-h-[40px] sm:min-h-[48px] items-center gap-1">
+            <span>👤</span> <span>{served}/{MAX_CUSTOMERS}</span>
+          </div>
           <button
             onClick={() => setPaused((p) => !p)}
             className={`min-h-[40px] min-w-[40px] sm:min-h-[48px] sm:min-w-[48px] rounded-full border-2 flex items-center justify-center font-black text-sm sm:text-base active:scale-95 transition ${paused ? "bg-amber-500 border-amber-600 text-white" : "bg-white border-slate-200 active:bg-slate-50"}`}
@@ -221,80 +227,73 @@ export const DoughFactory: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile: Customer queue collapsible on top */}
-      <div className="md:hidden mb-3">
-        <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xl overflow-hidden">
-          <button onClick={() => setQueueOpen(!queueOpen)} className="w-full flex items-center justify-between p-3 active:bg-slate-50 min-h-[48px]">
-            <span className="text-xs font-black tracking-widest text-slate-500 uppercase flex items-center gap-2">👥 Antrean ({queue.length}) {queueOpen ? "▾" : "▸"}</span>
-            <span className="text-xs font-bold text-amber-600">{PASTRY_META[activeWant].icon} {PASTRY_META[activeWant].label}</span>
+      {/* Customer Queue — responsive single component */}
+      <div className="mb-3">
+        <div className="bg-white rounded-[1.5rem] border-[3px] border-slate-200 shadow-xl p-3">
+          <button
+            onClick={() => setQueueOpen(!queueOpen)}
+            className="w-full flex items-center justify-between p-2 sm:p-3 active:bg-slate-50 rounded-xl min-h-[44px]"
+          >
+            <span className="text-xs font-black tracking-widest text-slate-500 uppercase">👥 Antrean ({served}/{MAX_CUSTOMERS}) {queueOpen ? "▾" : "▸"}</span>
+            {queue.length > 0 ? (
+              <span className="text-xs font-bold text-amber-600">{PASTRY_META[queue[0]].icon} {PASTRY_META[queue[0]].label}</span>
+            ) : (
+              <span className="text-xs font-bold text-emerald-600">✅ Selesai!</span>
+            )}
           </button>
-          {/* Always show active customer */}
-          <div className="px-3 pb-3">
-            <div className="rounded-2xl border-2 bg-amber-50 border-amber-300 shadow p-3 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-white border-2 border-amber-300 flex items-center justify-center text-2xl shrink-0">{CUSTOMERS_EMOJI[0]}</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-black text-slate-800">Pelanggan Aktif</p>
-                <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border bg-white border-amber-200 text-slate-700">
-                  <span>{PASTRY_META[activeWant].icon}</span>
-                  <span className="text-xs sm:text-sm">{CHEF_QUOTES[activeWant]}</span>
-                </div>
-              </div>
-              {happy && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-xl">😍</motion.span>}
-            </div>
-            <AnimatePresence>
-              {queueOpen && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                  <div className="space-y-2 mt-3">
-                    {queue.slice(1).map((want, idx) => (
-                      <div key={idx} className="rounded-2xl border-2 bg-slate-50 border-slate-200 opacity-70 p-3 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-white border-2 border-slate-200 flex items-center justify-center text-xl shrink-0">{CUSTOMERS_EMOJI[idx + 1]}</div>
-                        <span className="text-xs font-bold text-slate-500">Antre {idx + 1}: {PASTRY_META[want].icon} {PASTRY_META[want].label}</span>
+          <AnimatePresence>
+            {queueOpen && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="space-y-2 mt-2">
+                  {queue.map((want, idx) => {
+                    const isActive = idx === 0;
+                    return (
+                      <div key={idx} className={`rounded-xl border-2 p-2 sm:p-3 flex items-center gap-2 sm:gap-3 ${isActive ? "bg-amber-50 border-amber-300 shadow" : "bg-slate-50 border-slate-200 opacity-60"}`}>
+                        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-lg border-2 shrink-0 ${isActive ? "bg-white border-amber-300" : "bg-white border-slate-200"}`}>{CUSTOMERS_EMOJI[idx % CUSTOMERS_EMOJI.length]}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-black ${isActive ? "text-slate-800" : "text-slate-500"}`}>{isActive ? "Pelanggan Aktif" : `Antre ${idx + 1}`}</p>
+                          <span className="text-xs font-bold">{PASTRY_META[want].icon} {CHEF_QUOTES[want]}</span>
+                        </div>
+                        {isActive && happy && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-lg">😍</motion.span>}
                       </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {queue.length === 0 && (
+            <div className="mt-3 bg-emerald-50 border-2 border-emerald-300 rounded-xl p-3 text-center">
+              <p className="text-sm font-black text-emerald-700">🎉 Semua {MAX_CUSTOMERS} pelanggan sudah dilayani!</p>
+              <p className="text-xs text-emerald-600">Skor akhir: {score}</p>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Kitchen + Sidebar */}
       <div className="grid grid-cols-12 gap-3 md:gap-4">
-        {/* Desktop queue — hidden on mobile (mobile has collapsible above) */}
+        {/* Sidebar tip */}
         <div className="hidden md:block md:col-span-3">
-          <div className="bg-white rounded-[1.5rem] border-[3px] border-slate-200 shadow-xl p-3 h-full">
-            <p className="text-xs font-black tracking-widest text-slate-400 uppercase mb-3">👥 Antrean Pelanggan</p>
-            <div className="space-y-3">
-              {queue.map((want, idx) => {
-                const isActive = idx === 0;
-                return (
-                  <div key={idx} className={`rounded-2xl border-2 p-3 flex items-center gap-3 transition-all ${isActive ? "bg-amber-50 border-amber-300 shadow-lg scale-[1.02]" : "bg-slate-50 border-slate-200 opacity-60"}`}>
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl border-2 shrink-0 ${isActive ? "bg-white border-amber-300" : "bg-white border-slate-200"}`}>{CUSTOMERS_EMOJI[idx % CUSTOMERS_EMOJI.length]}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-black ${isActive ? "text-slate-800" : "text-slate-500"}`}>{isActive ? "Pelanggan Aktif" : `Antre ${idx}`}</p>
-                      <div className={`mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${isActive ? "bg-white border-amber-200 text-slate-700" : "bg-white border-slate-200 text-slate-500"}`}>
-                        <span>{PASTRY_META[want].icon}</span>
-                        <span className="text-xs">{CHEF_QUOTES[want]}</span>
-                      </div>
-                    </div>
-                    {isActive && happy && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-xl">😍</motion.span>}
-                  </div>
-                );
-              })}
+          <div className="bg-white rounded-[1.5rem] border-[3px] border-slate-200 shadow-xl p-3 h-full flex flex-col">
+            <p className="text-xs font-black tracking-widest text-slate-400 uppercase mb-3">📋 Cara Main</p>
+            <div className="space-y-2 text-xs text-slate-600">
+              <p>1. Pilih adonan di bawah</p>
+              <p>2. Tap <b>Pintu 1/2/3</b></p>
+              <p>3. Amati adonan berubah di pipa</p>
+              <p>4. Samakan hasil di <b>Oven K</b></p>
             </div>
-            <div className="mt-3 bg-slate-900 text-white rounded-xl p-3 flex items-center gap-2">
+            <div className="mt-auto pt-3 bg-slate-900 text-white rounded-xl p-3 flex items-center gap-2">
               <span className="text-lg">💡</span>
-              <p className="text-xs leading-tight">Cocokkan akhir di <b>Oven K</b> dengan balon pelanggan!</p>
+              <p className="text-xs leading-tight">Cocokkan akhir di <b>Oven K</b>!</p>
             </div>
           </div>
         </div>
 
-        {/* Kitchen floor — responsive scalable map */}
+        {/* Kitchen floor */}
         <div className="col-span-12 md:col-span-9">
           <div className="w-full max-w-4xl mx-auto">
-            {/* Scrollable wrapper for conveyor map */}
             <div className="relative rounded-2xl md:rounded-[1.75rem] border-2 md:border-[3px] border-amber-200 shadow-xl overflow-hidden bg-[#FDF6E3]">
-              {/* Scrollable inner — allows horizontal touch scroll on mobile */}
               <div className="overflow-x-auto overflow-y-hidden touch-pan-x overscroll-contain scrollbar-thin scrollbar-thumb-amber-300 scrollbar-track-amber-50 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-amber-300">
                 <div className="relative min-w-[560px] md:min-w-0 w-full" style={{ minHeight: "clamp(420px, 55vh, 520px)", height: "clamp(420px, 55vh, 520px)" }}>
                   <div className="absolute inset-0" style={{ background: "repeating-linear-gradient(90deg, #FDF6E3 0 40px, #FCEFC7 40px 80px), linear-gradient(to bottom, #FDF6E3, #F5E6B8)" }} />
@@ -318,14 +317,14 @@ export const DoughFactory: React.FC = () => {
                     <path d={`M ${STATION_POS.k_bot.x} ${STATION_POS.k_bot.y + 5} L ${SERVE_POS.x} ${SERVE_POS.y - 5}`} fill="none" stroke="#B45309" strokeWidth="4" strokeDasharray="4 2" />
                   </svg>
 
-                  {/* Chutes — touch 48px */}
+                  {/* Chutes */}
                   {[1, 2, 3].map((door) => {
                     const isActive = activeDoor === door;
                     return (
                       <button
                         key={door}
                         onClick={() => handleChute(door)}
-                        disabled={animating}
+                        disabled={animating || isFinished}
                         className="absolute -translate-x-1/2 -translate-y-1/2 group min-h-[48px] min-w-[48px] active:scale-95 transition-transform"
                         style={{ left: `${CHUTE_POS[door].x}%`, top: `${CHUTE_POS[door].y}%` }}
                       >
@@ -338,7 +337,7 @@ export const DoughFactory: React.FC = () => {
                     );
                   })}
 
-                  {/* Stations — pastry signs */}
+                  {/* Stations */}
                   {Object.entries(STATION_POS).map(([id, pos]) => {
                     const gate = Object.values(PIPELINE_ROUTES).flat().find((g) => g.id === id);
                     if (!gate) return null;
@@ -377,7 +376,7 @@ export const DoughFactory: React.FC = () => {
                       <span className="text-base sm:text-xl">🍽️</span>
                       <div>
                         <p className="text-[10px] sm:text-xs font-black tracking-widest leading-none">SERVING COUNTER</p>
-                        <p className="text-[9px] sm:text-[10px] opacity-80 hidden sm:block">Oven K — Antar ke pelanggan</p>
+                        <p className="text-[9px] sm:text-[10px] opacity-80 hidden sm:block">Oven K</p>
                       </div>
                       <motion.span animate={{ rotate: trace && step === trace.steps.length && !animating ? [0, 10, -10, 0] : 0 }} transition={{ duration: 0.5, repeat: trace && step === trace.steps.length ? 2 : 0 }} className="text-base sm:text-lg ml-1">🔔</motion.span>
                     </div>
@@ -402,14 +401,22 @@ export const DoughFactory: React.FC = () => {
                     )}
                   </AnimatePresence>
 
-                  {!trace && (
+                  {!trace && !isFinished && (
                     <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-amber-200 shadow flex items-center gap-2 text-[11px] sm:text-xs font-bold text-slate-700 whitespace-nowrap max-w-[90%]">
-                      <span>👇</span> <span className="hidden sm:inline">Pilih adonan di bawah,</span> tap Chute!
+                      <span>👇</span> <span className="hidden sm:inline">Pilih adonan,</span> tap Chute!
+                    </div>
+                  )}
+                  {isFinished && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl">
+                      <div className="bg-white rounded-2xl p-6 text-center shadow-2xl">
+                        <p className="text-3xl mb-2">🎉</p>
+                        <p className="font-black text-lg text-slate-800">Semua Pelanggan Selesai!</p>
+                        <p className="text-sm text-slate-500 mt-1">Skor: {score} | Level: {level}</p>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-              {/* Scroll hint — mobile only */}
               <div className="flex md:hidden items-center justify-center gap-1 py-1.5 text-[10px] text-amber-700/60">
                 <span>←</span> geser untuk lihat semua jalur <span>→</span>
               </div>
@@ -418,21 +425,22 @@ export const DoughFactory: React.FC = () => {
         </div>
       </div>
 
-      {/* Ingredient Station — fixed bottom on mobile, static on desktop */}
+      {/* Ingredient Station */}
       <div className="fixed bottom-0 inset-x-0 z-30 md:static md:z-auto bg-white md:bg-gradient-to-br md:from-amber-50 md:to-orange-50 border-t-2 md:border-[3px] border-amber-200 md:rounded-[1.5rem] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] md:shadow-xl p-2 sm:p-3 md:p-4 pb-[max(8px,env(safe-area-inset-bottom))] md:pb-4">
         <p className="hidden md:flex text-xs font-black tracking-widest text-amber-800 uppercase mb-3 items-center justify-center gap-2">
           <span className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center">🧺</span> Meja Bahan — Pilih Adonan
         </p>
         <p className="md:hidden text-[11px] font-black tracking-widest text-amber-800 uppercase mb-2 text-center">🧺 Pilih Adonan</p>
         <div className="grid grid-cols-3 gap-2 sm:gap-3 max-w-4xl mx-auto">
-          {(["Square", "Triangle", "Circle"] as Shape[]).map((s) => {
+          {INGREDIENTS.map((s) => {
             const isSelected = selectedShape === s;
             const meta = PASTRY_META[s];
             return (
               <button
                 key={s}
-                onClick={() => !animating && setSelectedShape(s)}
-                className={`relative flex flex-col items-center gap-1 sm:gap-2 py-2 sm:py-4 rounded-2xl sm:rounded-[1.5rem] border-2 sm:border-[3px] transition-all min-h-[72px] sm:min-h-[96px] min-w-[48px] active:scale-95 ${isSelected ? "bg-white border-indigo-500 shadow-xl scale-[1.02] sm:scale-[1.04] ring-2 sm:ring-4 ring-indigo-500/20" : "bg-white/95 md:bg-white/80 border-amber-200 md:border-white hover:border-amber-300 shadow-md"} ${animating ? "opacity-60 cursor-not-allowed" : ""}`}
+                onClick={() => !animating && !isFinished && setSelectedShape(s)}
+                disabled={isFinished}
+                className={`relative flex flex-col items-center gap-1 sm:gap-2 py-2 sm:py-4 rounded-2xl sm:rounded-[1.5rem] border-2 sm:border-[3px] transition-all min-h-[72px] sm:min-h-[96px] min-w-[48px] active:scale-95 ${isSelected ? "bg-white border-indigo-500 shadow-xl scale-[1.02] sm:scale-[1.04] ring-2 sm:ring-4 ring-indigo-500/20" : "bg-white/95 md:bg-white/80 border-amber-200 md:border-white hover:border-amber-300 shadow-md"} ${animating || isFinished ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 <div className={`w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center border-2 shadow-inner shrink-0 ${isSelected ? "bg-indigo-50 border-indigo-200" : "bg-amber-50 border-amber-200"}`}>
                   <PastryIcon shape={s} size={32} />
@@ -449,7 +457,7 @@ export const DoughFactory: React.FC = () => {
         </div>
       </div>
 
-      {/* Breadcrumb — with bottom padding for fixed bar on mobile */}
+      {/* Breadcrumb */}
       <div className="mt-3 md:mt-4 grid md:grid-cols-3 gap-2 sm:gap-3 mb-2 md:mb-0">
         <div className="md:col-span-2 bg-white rounded-2xl border-2 border-slate-200 p-2.5 sm:p-3 flex items-center gap-1.5 sm:gap-2 flex-wrap min-h-[48px]">
           <span className="text-xs font-black text-slate-400 uppercase flex items-center gap-1 shrink-0">📜 Jejak:</span>

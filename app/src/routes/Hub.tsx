@@ -9,7 +9,7 @@ import { toast } from "sonner";
 export default function Hub() {
   const nav = useNavigate();
   const student = useStudentStore((s) => s.student);
-  const { mod1Score, mod2Score, reasoning, waterCorrect, hintsUsed, reset } = useProgressStore();
+  const { mod1Score, mod2Score, mod2IntroCompleted, reasoning, waterCorrect, hintsUsed, reset } = useProgressStore();
 
   if (!student) {
     nav("/onboarding");
@@ -196,7 +196,7 @@ export default function Hub() {
               <motion.button
                 whileHover={!mod2Locked ? { scale: 1.015, y: -2 } : undefined}
                 whileTap={!mod2Locked ? { scale: 0.985 } : undefined}
-                onClick={() => !mod2Locked && nav("/module/2")}
+                onClick={() => !mod2Locked && nav(mod2IntroCompleted ? "/module/2" : "/module/2/intro")}
                 disabled={mod2Locked}
                 className={`text-left rounded-[1.25rem] border-[3px] overflow-hidden shadow-xl transition-all group relative ${mod2Locked ? "border-slate-300 bg-slate-100 cursor-not-allowed opacity-80" : "border-emerald-700 bg-white hover:shadow-2xl border-[3px]"}`}
                 title={mod2Locked ? "Selesaikan Pabrik Adonan dulu untuk membuka Lab Pupuk!" : "Masuk Lab Pupuk"}
