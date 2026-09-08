@@ -100,6 +100,7 @@ function randomWant(): Shape {
 
 const MAX_CUSTOMERS = 5;
 const INGREDIENTS: Shape[] = ["Square", "Triangle", "Circle"];
+type GameState = "playing" | "completed";
 
 export const DoughFactory: React.FC = () => {
   const setMod1Score = useProgressStore((s) => s.setMod1Score);
@@ -116,10 +117,11 @@ export const DoughFactory: React.FC = () => {
   const [animating, setAnimating] = useState(false);
   const [popShape, setPopShape] = useState<Shape | null>(null);
   const [happy, setHappy] = useState(false);
+  const [gameState, setGameState] = useState<GameState>("playing");
   const timerRef = useRef<number | null>(null);
 
-  const isFinished = served >= MAX_CUSTOMERS && queue.length === 0;
-  const activeWant = queue[0];
+  const isFinished = gameState === "completed";
+  const activeWant: Shape | undefined = queue[0];
 
   const getTokenPos = (): Pos => {
     if (!trace || activeDoor === null) return CHUTE_POS[activeDoor ?? 2];
@@ -136,9 +138,17 @@ export const DoughFactory: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (served >= MAX_CUSTOMERS && gameState === "playing") {
+      const t = setTimeout(() => setGameState("completed"), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [served, gameState]);
+
   const handleChute = (door: number) => {
-    if (animating || paused || isFinished) return;
+    if (animating || paused || isFinished || !activeWant) return;
     const result = traceRoute(selectedShape, door);
+    const targetShape = activeWant;
     setActiveDoor(door);
     setTrace(result);
     setStep(0);
@@ -163,7 +173,7 @@ export const DoughFactory: React.FC = () => {
         setTimeout(() => {
           setAnimating(false);
           const final = result.final;
-          const isWin = final === activeWant;
+          const isWin = final === targetShape;
           if (isWin) {
             setHappy(true);
             setScore((p) => p + 100);
@@ -181,7 +191,7 @@ export const DoughFactory: React.FC = () => {
               setStep(0);
             }, 900);
           } else {
-            toast.error(`Oops! Mau ${PASTRY_META[activeWant].icon} tapi kamu antar ${PASTRY_META[final].icon}`, { description: "Coba pintu lain atau ganti adonan!" });
+            toast.error(`Oops! Mau ${PASTRY_META[targetShape].icon} tapi kamu antar ${PASTRY_META[final].icon}`, { description: "Coba pintu lain atau ganti adonan!" });
             setAnimating(false);
           }
         }, 600);
@@ -193,6 +203,37 @@ export const DoughFactory: React.FC = () => {
   };
 
   const stationsToShow = activeDoor ? PIPELINE_ROUTES[activeDoor].map((g) => g.id) : [];
+
+  if (isFinished) {
+    return (
+      <div className="w-full max-w-6xl mx-auto px-2 sm:px-3 md:px-0 pb-[160px] md:pb-0">
+        <div className="bg-white rounded-2xl md:rounded-[1.5rem] border-2 md:border-[3px] border-amber-200 shadow-xl p-6 sm:p-8 md:p-10 flex flex-col items-center justify-center min-h-[300px] md:min-h-[400px]">
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, damping: 12 }}>
+            <p className="text-5xl sm:text-6xl mb-3 text-center">🎉</p>
+          </motion.div>
+          <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="font-black text-xl sm:text-2xl text-slate-800 text-center">
+            Level Selesai!
+          </motion.p>
+          <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="text-sm sm:text-base text-slate-500 mt-2 text-center">
+            {MAX_CUSTOMERS}/{MAX_CUSTOMERS} pelanggan dilayani
+          </motion.p>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="flex items-center gap-4 mt-4">
+            <div className="bg-gradient-to-br from-amber-400 to-orange-400 text-white px-4 py-2 rounded-full border-2 border-amber-600 shadow flex items-center gap-2">
+              <span className="text-xs font-black">SKOR</span>
+              <span className="text-lg font-black">{score}</span>
+            </div>
+            <div className="bg-slate-900 text-white px-4 py-2 rounded-full border-2 border-slate-700 flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-400">LVL</span>
+              <span className="font-black text-amber-300 text-lg">{level}</span>
+            </div>
+          </motion.div>
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="text-xs text-slate-400 mt-4">
+            Kembali ke peta untuk melanjutkan...
+          </motion.p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-6xl mx-auto px-2 sm:px-3 md:px-0 pb-[160px] md:pb-0">
@@ -372,7 +413,7 @@ export const DoughFactory: React.FC = () => {
 
                   {/* Serving Counter */}
                   <div className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${SERVE_POS.x}%`, top: `${SERVE_POS.y}%` }}>
-                    <div className={`px-3 sm:px-5 py-2 sm:py-3 rounded-2xl border-[3px] shadow-xl flex items-center gap-1.5 sm:gap-2 ${trace && step === trace.steps.length && !animating ? (trace.final === activeWant ? "bg-emerald-500 border-emerald-300 text-white" : "bg-amber-500 border-amber-300 text-white") : "bg-slate-900 border-amber-400 text-white"}`}>
+                    <div className={`px-3 sm:px-5 py-2 sm:py-3 rounded-2xl border-[3px] shadow-xl flex items-center gap-1.5 sm:gap-2 ${trace && step === trace.steps.length && !animating ? (activeWant && trace.final === activeWant ? "bg-emerald-500 border-emerald-300 text-white" : "bg-amber-500 border-amber-300 text-white") : "bg-slate-900 border-amber-400 text-white"}`}>
                       <span className="text-base sm:text-xl">🍽️</span>
                       <div>
                         <p className="text-[10px] sm:text-xs font-black tracking-widest leading-none">SERVING COUNTER</p>
@@ -401,18 +442,9 @@ export const DoughFactory: React.FC = () => {
                     )}
                   </AnimatePresence>
 
-                  {!trace && !isFinished && (
+                  {!trace && (
                     <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-amber-200 shadow flex items-center gap-2 text-[11px] sm:text-xs font-bold text-slate-700 whitespace-nowrap max-w-[90%]">
                       <span>👇</span> <span className="hidden sm:inline">Pilih adonan,</span> tap Chute!
-                    </div>
-                  )}
-                  {isFinished && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl">
-                      <div className="bg-white rounded-2xl p-6 text-center shadow-2xl">
-                        <p className="text-3xl mb-2">🎉</p>
-                        <p className="font-black text-lg text-slate-800">Semua Pelanggan Selesai!</p>
-                        <p className="text-sm text-slate-500 mt-1">Skor: {score} | Level: {level}</p>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -471,7 +503,7 @@ export const DoughFactory: React.FC = () => {
               </React.Fragment>
             ))
           )}
-          {trace && step === trace.steps.length && !animating && <span className={`ml-1 sm:ml-2 text-[11px] sm:text-xs font-black px-2 py-1 rounded-full shrink-0 ${trace.final === activeWant ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>{trace.final === activeWant ? "✅ Cocok!" : "❌ Coba lagi"}</span>}
+          {trace && step === trace.steps.length && !animating && <span className={`ml-1 sm:ml-2 text-[11px] sm:text-xs font-black px-2 py-1 rounded-full shrink-0 ${activeWant && trace.final === activeWant ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>{activeWant && trace.final === activeWant ? "✅ Cocok!" : "❌ Coba lagi"}</span>}
         </div>
         <div className="bg-slate-900 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between min-h-[48px]">
           <span className="text-xs text-slate-400 hidden sm:inline">Butuh bantuan?</span>
