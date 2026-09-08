@@ -54,17 +54,18 @@ export function traceRoute(startShape: Shape, door: number): { final: Shape; his
 
 export function validateAllRoutes(): boolean {
   const shapes: Shape[] = ["Square", "Triangle", "Circle"];
+  const targets: Shape[] = ["Square", "Triangle"];
   const pastryName: Record<Shape, string> = { Square: "Brownie 🟫", Triangle: "Cheesecake 🍰", Circle: "Donut 🍩" };
   let allOk = true;
   for (const door of [1, 2, 3] as const) {
     const reachable = new Set(shapes.map((s) => traceRoute(s, door as number).final));
-    for (const target of shapes) {
+    for (const target of targets) {
       if (!reachable.has(target)) {
         console.warn(`[doughFactoryEngine] Door ${door} cannot produce ${pastryName[target]} — reachable: ${[...reachable].map((r) => pastryName[r]).join(", ")}`);
         allOk = false;
       }
     }
-    if (reachable.size === shapes.length) console.info(`[doughFactoryEngine] Door ${door} OK — can produce all 3`);
+    if (reachable.has("Square") && reachable.has("Triangle")) console.info(`[doughFactoryEngine] Door ${door} OK — can produce Brownie & Cheesecake`);
   }
   return allOk;
 }

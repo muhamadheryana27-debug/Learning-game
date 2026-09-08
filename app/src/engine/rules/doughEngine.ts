@@ -54,20 +54,22 @@ export function traceRoute(startShape: Shape, door: number): { final: Shape; his
 }
 
 // Validation helper — run on startup, logs if any door cannot produce a target pastry
+// Only checks Brownie (Square) and Cheesecake (Triangle) — Donut is not a customer request
 export function validateAllRoutes(): boolean {
   const shapes: Shape[] = ["Square", "Triangle", "Circle"];
+  const targets: Shape[] = ["Square", "Triangle"];
   const pastryName: Record<Shape, string> = { Square: "Brownie 🟫", Triangle: "Cheesecake 🍰", Circle: "Donut 🍩" };
   let allOk = true;
   for (const door of [1, 2, 3] as const) {
     const reachable = new Set(shapes.map((s) => traceRoute(s, door).final));
-    for (const target of shapes) {
+    for (const target of targets) {
       if (!reachable.has(target)) {
         console.warn(`[doughEngine] Door ${door} cannot produce ${pastryName[target]} — reachable: ${[...reachable].map((r) => pastryName[r]).join(", ")}`);
         allOk = false;
       }
     }
-    if (reachable.size === shapes.length) {
-      console.info(`[doughEngine] Door ${door} OK — can produce all 3 pastries: ${[...reachable].map((r) => pastryName[r]).join(", ")}`);
+    if (reachable.has("Square") && reachable.has("Triangle")) {
+      console.info(`[doughEngine] Door ${door} OK — can produce Brownie & Cheesecake`);
     }
   }
   return allOk;
