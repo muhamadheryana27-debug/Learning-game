@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 type ProgressState = {
   mod1Score: number;
   mod2Score: number;
+  mod2IntroCompleted: boolean;
   waterCorrect: boolean;
   reasoning: string;
   hintsUsed: number;
@@ -11,6 +12,7 @@ type ProgressState = {
   assignments: Record<string, string>;
   experimentAnswers: Record<number, string[]>; // expId -> checked features
   setMod1Score: (v: number) => void;
+  setMod2IntroCompleted: () => void;
   setMod2: (assignments: Record<string, string>, score: number, waterCorrect: boolean) => void;
   setReasoning: (v: string) => void;
   addHint: () => void;
@@ -22,6 +24,7 @@ type ProgressState = {
 const initial = {
   mod1Score: 0,
   mod2Score: 0,
+  mod2IntroCompleted: false,
   waterCorrect: false,
   reasoning: "",
   hintsUsed: 0,
@@ -35,6 +38,7 @@ export const useProgressStore = create<ProgressState>()(
     (set) => ({
       ...initial,
       setMod1Score: (v) => set({ mod1Score: v }),
+      setMod2IntroCompleted: () => set({ mod2IntroCompleted: true }),
       setMod2: (assignments, score, waterCorrect) => set({ assignments, mod2Score: score, waterCorrect }),
       setReasoning: (v) => set({ reasoning: v }),
       addHint: () => set((s) => ({ hintsUsed: Math.min(s.hintsUsed + 1, 3) })),
