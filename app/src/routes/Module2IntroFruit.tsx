@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProgressStore } from "../store/useProgressStore";
@@ -122,7 +122,7 @@ function FruitCard({ id, fruit, isSelected, isPlaced, onSelect, onDragStart, onD
 
 export default function Module2IntroFruit() {
   const nav = useNavigate();
-  const { setMod2IntroCompleted } = useProgressStore();
+  const { setMod2IntroCompleted, mod2IntroCompleted, _hasHydrated } = useProgressStore();
   const [questIdx, setQuestIdx] = useState(0);
   const [dropped, setDropped] = useState<Record<ZoneId, FruitId[]>>({ adi: [], both: [], edi: [] });
   const [selected, setSelected] = useState<FruitId | null>(null);
@@ -131,37 +131,72 @@ export default function Module2IntroFruit() {
   const [completed, setCompleted] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // If intro was already completed in a previous session (persisted), show celebration immediately
+  useEffect(() => {
+    if (_hasHydrated && mod2IntroCompleted && !completed) {
+      // Re-hydrate dropped to reflect correct placement for visual completeness
+      setDropped({ adi: [...EXPECTED.adi], both: [...EXPECTED.both], edi: [...EXPECTED.edi] });
+      setCompleted(true);
+    }
+  }, [_hasHydrated, mod2IntroCompleted, completed]);
+
   const currentQuest = QUESTS[questIdx];
 
-  const placeFruit = useCallback(
-    (zone: ZoneId) => {
-      if (!selected || completed) return;
+  // ── Automatic completion: triggers when ALL 4 fruits are correctly placed
+  //    regardless of quest order — safety net so students never get stuck
+  useEffect(() => {
+    if (completed) return;
+    const allCorrect =
+      dropped.adi.length === EXPECTED.adi.length &&
+      dropped.adi.every((f) => EXPECTED.adi.includes(f)) &&
+      dropped.both.length === EXPECTED.both.length &&
+      dropped.both.every((f) => EXPECTED.both.includes(f)) &&
+      dropped.edi.length === EXPECTED.edi.length &&
+      dropped.edi.every((f) => EXPECTED.edi.includes(f));
+    const totalPlaced = dropped.adi.length + dropped.both.length + dropped.edi.length;
+    if (allCorrect && totalPlaced === 4) {
+      setCompleted(true);
+      setMod2IntroCompleted();
+      toast.success("🎉 Semua buah tepat! Pemanasan selesai!");
+    }
+  }, [dropped, completed, setMod2IntroCompleted]);
+
+  const placeFruitWith = useCallback(
+    (fruitId: FruitId, zone: ZoneId) => {
+      if (!fruitId || completed) return;
       const expected = EXPECTED[zone];
-      const isCorrect = expected.includes(selected);
+      const isCorrect = expected.includes(fruitId);
 
       if (isCorrect) {
-        setDropped((prev) => ({ ...prev, [zone]: [...prev[zone], selected] }));
+        setDropped((prev) => ({ ...prev, [zone]: [...prev[zone], fruitId] }));
         toast.success("✨ Tepat sekali!");
-        setSelected(null);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 1200);
 
+        // Quest progression (sequential) — the useEffect above handles
+        // the true "all-correct" completion even if quests are done out of order
         setTimeout(() => {
-          if (zone === currentQuest.target) {
+          if (zone === QUESTS[questIdx]?.target) {
             if (questIdx < QUESTS.length - 1) {
               setQuestIdx((i) => i + 1);
-            } else {
-              setCompleted(true);
-              setMod2IntroCompleted();
-              toast.success("🎉 Semua quest selesai!");
             }
+            // Final completion is handled by the useEffect safety net above
           }
         }, 600);
       } else {
         toast.error("❌ Belum tepat, coba lagi!", { description: `Zonanya salah — baca quest-nya ya!` });
       }
     },
-    [selected, completed, questIdx, currentQuest.target, setMod2IntroCompleted],
+    [completed, questIdx],
+  );
+
+  const placeFruit = useCallback(
+    (zone: ZoneId) => {
+      if (!selected) return;
+      placeFruitWith(selected, zone);
+      setSelected(null);
+    },
+    [selected, placeFruitWith],
   );
 
   // --- HTML5 Drag & Drop (desktop) ---
@@ -178,8 +213,7 @@ export default function Module2IntroFruit() {
     e.preventDefault();
     const fruitId = e.dataTransfer.getData("text/plain") as FruitId;
     if (fruitId && FRUITS[fruitId]) {
-      setSelected(fruitId);
-      setTimeout(() => placeFruit(zone), 50);
+      placeFruitWith(fruitId, zone);
     }
     setDragging(null);
     setDragOver(null);
@@ -216,6 +250,37 @@ export default function Module2IntroFruit() {
         </div>
 
         <div className="p-4 sm:p-6 space-y-5">
+          {/* ── Tab Navigation: Pemanasan vs Lab Pupuk Ajaib ── */}
+          <div className="flex gap-2">
+            {/* Active tab — Pemanasan Buah */}
+            <div className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border-2 font-bold text-xs sm:text-sm ${completed ? "bg-emerald-50 border-emerald-400 text-emerald-700 shadow-sm" : "bg-amber-500 border-amber-600 text-white shadow-[0_2px_8px_rgba(245,158,11,0.3)]"}`}>
+              <span>{completed ? "✅" : "🍎"}</span>
+              <span>Pemanasan Buah</span>
+              {completed && <span className="hidden sm:inline text-[10px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded-full">Selesai</span>}
+            </div>
+            {/* Locked / Unlocked tab — Lab Pupuk Ajaib */}
+            {completed ? (
+              <motion.button
+                initial={{ scale: 0.95 }}
+                animate={{ scale: 1 }}
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => nav("/module/2")}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border-2 font-bold text-xs sm:text-sm bg-emerald-500 border-emerald-600 text-white shadow-[0_4px_12px_rgba(16,185,129,0.35)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.45)] transition-all"
+              >
+                <motion.span animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}>🧪</motion.span>
+                <span className="hidden sm:inline">Lab</span> Pupuk Ajaib
+                <span className="bg-white text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full">Buka! →</span>
+              </motion.button>
+            ) : (
+              <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border-2 font-bold text-xs sm:text-sm bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed">
+                <span>🔒</span>
+                <span className="hidden sm:inline">Lab</span> Pupuk Ajaib
+                <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full">Terkunci</span>
+              </div>
+            )}
+          </div>
+
           {/* Quest Banner */}
           {!completed && (
             <motion.div
@@ -296,11 +361,21 @@ export default function Module2IntroFruit() {
             )}
           </div>
 
-          {/* Reset Button */}
+          {/* Reset + Emergency skip — visible before completion */}
           {!completed && (
-            <div className="text-center">
-              <button onClick={resetSelection} className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition">
+            <div className="flex items-center justify-center gap-4 text-xs">
+              <button onClick={resetSelection} className="text-slate-400 hover:text-slate-600 underline underline-offset-2 transition">
                 🔄 Reset Pilihan
+              </button>
+              <span className="text-slate-300">·</span>
+              <button
+                onClick={() => {
+                  setMod2IntroCompleted();
+                  nav("/module/2");
+                }}
+                className="text-slate-400 hover:text-emerald-600 underline underline-offset-2 transition"
+              >
+                Lewati Pemanasan ➔ Lanjut ke Lab Pupuk
               </button>
             </div>
           )}
@@ -309,13 +384,34 @@ export default function Module2IntroFruit() {
           <AnimatePresence>
             {completed && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
+                {/* Confetti Particles */}
+                <div className="relative h-0 pointer-events-none">
+                  {Array.from({ length: 16 }).map((_, i) => (
+                    <motion.span
+                      key={i}
+                      initial={{ opacity: 0, scale: 0, x: 0, y: 0 }}
+                      animate={{
+                        opacity: [0, 1, 0],
+                        scale: [0, 1.2, 0],
+                        x: Math.cos((i * 22.5 * Math.PI) / 180) * (80 + (i % 3) * 30),
+                        y: Math.sin((i * 22.5 * Math.PI) / 180) * 60 - 40,
+                      }}
+                      transition={{ duration: 1.8, delay: 0.3 + i * 0.04, ease: "easeOut" }}
+                      className="absolute left-1/2 -top-2 text-xl sm:text-2xl"
+                      style={{ zIndex: 10 }}
+                    >
+                      {["🎉", "⭐", "✨", "🌟", "💫", "🎊", "🎈", "🎆"][i % 8]}
+                    </motion.span>
+                  ))}
+                </div>
+
                 {/* Celebration Banner */}
                 <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-2xl p-5 sm:p-6 text-center relative overflow-hidden">
                   <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, #10b981 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
                   <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", damping: 10 }} className="text-5xl sm:text-6xl mb-3 relative">🎉</motion.div>
                   <p className="text-lg sm:text-xl font-black text-emerald-800 relative">Luar Biasa!</p>
                   <p className="text-xs sm:text-sm text-emerald-700 mt-2 relative">Semua buah ini (Apel 🍎, Melon 🍈, Jeruk 🍊, Semangka 🍉) adalah buah yang disukai <b>Adi</b> ATAU <b>Edi</b>!</p>
-                  <div className="flex justify-center gap-2 mt-3 relative">
+                  <div className="flex justify-center gap-2 mt-3 relative flex-wrap">
                     {(["adi", "both", "edi"] as ZoneId[]).map((zone) => (
                       <div key={zone} className="bg-white border-2 border-emerald-200 rounded-xl px-3 py-2 text-center">
                         <p className="text-[10px] font-bold text-emerald-600">{ZONE_META[zone].label}</p>
@@ -327,29 +423,59 @@ export default function Module2IntroFruit() {
 
                 {/* Pak Taro Speech Bubble */}
                 <div className="flex gap-3 items-start">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 flex items-center justify-center text-xl sm:text-2xl shrink-0 shadow-inner">👨‍🔬</div>
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200, delay: 0.4 }}
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 flex items-center justify-center text-xl sm:text-2xl shrink-0 shadow-inner"
+                  >
+                    👨‍🔬
+                  </motion.div>
                   <div className="flex-1 relative">
                     <div className="hidden sm:block absolute -left-2 top-5 w-4 h-4 bg-amber-50 border-l-2 border-b-2 border-amber-200 rotate-45" />
                     <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 shadow-sm relative">
                       <p className="text-[10px] font-black tracking-widest text-amber-700 uppercase mb-1">💬 Pesan Pak Taro</p>
                       <p className="text-sm sm:text-[15px] font-bold text-slate-800 leading-relaxed">
-                        Hebat! Kamu sudah menguasai cara mencari <span className="bg-amber-200 px-1.5 py-0.5 rounded-lg border border-amber-300">kesamaan</span> dan <span className="bg-sky-100 px-1.5 py-0.5 rounded-lg border border-sky-200">perbedaan</span> data.
-                        Sekarang yuk bantu aku memecahkan rahasia <span className="bg-emerald-100 px-1.5 py-0.5 rounded-lg border border-emerald-200">Gelas A–F</span>!
+                        🎉 Luar biasa! Kamu sudah paham cara mencari <span className="bg-amber-200 px-1.5 py-0.5 rounded-lg border border-amber-300">irisan</span> dan <span className="bg-sky-100 px-1.5 py-0.5 rounded-lg border border-sky-200">gabungan</span> data.
+                        Sekarang, yuk gunakan kemampuan detektifmu untuk memecahkan rahasia <span className="bg-emerald-100 px-1.5 py-0.5 rounded-lg border border-emerald-200">Gelas A–F</span>!
                       </p>
                       <div className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full -rotate-3 shadow">✨ QUEST COMPLETE</div>
                     </div>
                   </div>
                 </div>
 
-                {/* CTA Button */}
+                {/* ── Prominent CTA: Clean state switch to Lab Pupuk Ajaib ── */}
                 <motion.button
-                  whileHover={{ scale: 1.02, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  whileHover={{ scale: 1.03, y: -3 }}
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => nav("/module/2")}
-                  className="w-full font-black text-sm sm:text-base tracking-wide py-4 sm:py-5 rounded-2xl border-[3px] bg-gradient-to-b from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white border-emerald-700 shadow-[0_6px_0_#065f46,0_8px_16px_rgba(0,0,0,0.2)] active:shadow-[0_2px_0_#065f46] active:translate-y-1 flex items-center justify-center gap-2"
+                  className="w-full font-black text-sm sm:text-base tracking-wide py-4 sm:py-5 rounded-2xl border-[3px] text-white border-emerald-700 flex items-center justify-center gap-2 relative overflow-hidden group"
+                  style={{ background: "linear-gradient(180deg, #34d399 0%, #059669 40%, #047857 100%)", boxShadow: "0 6px 0 #065f46, 0 8px 20px rgba(16,185,129,0.4), inset 0 1px 0 rgba(255,255,255,0.3)" }}
                 >
-                  <span className="text-xl">🧪</span> Lanjut ke Lab Pupuk Pak Taro ➔
+                  <span className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <span className="text-xl relative">🧪</span>
+                  <span className="relative">SELESAI PEMANASAN ➔ LANJUT KE LAB PUPUK AJAIB</span>
                 </motion.button>
+
+                {/* Backup navigation: skip or revisit */}
+                <div className="flex items-center justify-center gap-4 text-xs">
+                  <button
+                    onClick={() => nav("/hub")}
+                    className="text-slate-400 hover:text-slate-600 underline underline-offset-2 transition"
+                  >
+                    ← Kembali ke Hub
+                  </button>
+                  <span className="text-slate-300">·</span>
+                  <button
+                    onClick={() => nav("/module/2")}
+                    className="text-slate-400 hover:text-slate-600 underline underline-offset-2 transition"
+                  >
+                    Lewati Pemanasan ➔ Lanjut ke Lab Pupuk
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

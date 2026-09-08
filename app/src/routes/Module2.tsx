@@ -14,14 +14,14 @@ import { Module2DeductionBoard } from "../components/module2/Module2DeductionBoa
 // Blind Test Mode: neutral tint only — no botanical hint in color/label
 const BEAKER_TINT = "#E0F2FE";
 
-// Helper: mapping assignments -> FlowerProps untuk preview
+// Helper: mapping assignments -> FlowerProps untuk preview (revised: A=ganda, B=daun, C=putih, F=wavy, E=hitam, D=air)
 function propsFromGlasses(glasses: string[], assignments: Record<string, string>) {
   const features = glasses.map((g) => assignments[g]).filter(Boolean);
   const hasLeaves = features.includes("Menumbuhkan Daun");
-  const isWhite = features.includes("Kelopak Berlapis & Putih");
+  const isWhite = features.includes("Kelopak Putih");
   const isWavy = features.includes("Tangkai Bergelombang");
-  const isBlack = features.includes("Tengah Bunga Hitam");
-  const hasLayer2 = features.includes("Kelopak Berlapis & Putih");
+  const isBlack = features.includes("Pusat Hitam");
+  const hasLayer2 = features.includes("Kelopak Ganda");
   return {
     hasLeaves,
     petalColor: (isWhite ? "white" : "default") as "white" | "default",
@@ -33,7 +33,7 @@ function propsFromGlasses(glasses: string[], assignments: Record<string, string>
 
 export default function Module2() {
   const nav = useNavigate();
-  const { setMod2, setReasoning, setExperimentAnswer, reasoning, assignments: saved, mod2IntroCompleted } = useProgressStore();
+  const { setMod2, setReasoning, setExperimentAnswer, reasoning, assignments: saved, mod2IntroCompleted, _hasHydrated } = useProgressStore();
   const { selectedBeakers, addBeaker, removeBeaker, clearBeakers, currentFlowerState, animationPhase, isAnalyzing, evaluateMixture, discoveredTraits } =
     useLabStore();
   const [assignments, setAssignments] = useState<Record<string, string>>(saved);
@@ -41,8 +41,8 @@ export default function Module2() {
   const [, setExpChecks] = useState<Record<number, string[]>>({});
 
   useEffect(() => {
-    if (!mod2IntroCompleted) nav("/module/2/intro", { replace: true });
-  }, [mod2IntroCompleted, nav]);
+    if (_hasHydrated && !mod2IntroCompleted) nav("/module/2/intro", { replace: true });
+  }, [_hasHydrated, mod2IntroCompleted, nav]);
 
   const handleCheck = (expId: number, feature: string, checked: boolean) => {
     setExpChecks((prev) => {
@@ -77,13 +77,12 @@ export default function Module2() {
           <div className="flex gap-2">
             <HelpModal title="Level 2">
               <ol className="list-decimal ml-4 space-y-1">
-                <li><b>Lab Interaktif:</b> klik/drag gelas A–F ke slot (maks 3) → <b>Analisis Campuran</b> → lihat bunga animasi 3.2s (B=daun, C=putih 2-layer, D=wavy, E=hitam).</li>
-                <li><b>Eksperimen 1–3:</b> EXP1 A+B+C, EXP2 A+D+E, EXP3 C+D+F → centang fitur yang muncul.</li>
-                <li><b>Sort Evidence:</b> isi dropdown A–F → pilih fitur (✨=benar). Butuh bantuan? <b>Hint Lv1-3</b> (-10% each).</li>
-                <li>Klik <b>UJI SEMUA HIPOTESIS</b> → 3 bunga verifikasi. Semua `MATCH ✓` = <b>CASE SOLVED</b>.</li>
+                <li><b>Lab Interaktif:</b> klik/drag gelas A–F ke slot (maks 3) → <b>Analisis Campuran</b> → lihat bunga 3.2s (A=ganda, B=daun, C=putih, F=wavy, E=hitam, D=air).</li>
+                <li><b>Eksperimen 1–3:</b> EXP1 A+B+C → Ganda+Putih+Daun · EXP2 A+D+E → Ganda+Hitam · EXP3 C+D+F → Putih+Bergelombang</li>
+                <li><b>Deduksi 3 Fase:</b> Kartu Bukti → Panduan Irisan → Papan Drag & Drop A–F ke 6 ciri.</li>
                 <li>Tulis <b>alasan min 20 karakter</b> → <b>Simpan</b>.</li>
               </ol>
-              <p className="mt-2 text-xs text-slate-500">Tips: Catat setiap hasil di panel checklist — pola akan terlihat setelah 2–3 percobaan.</p>
+              <p className="mt-2 text-xs text-slate-500">Tips: Perhatikan irisan — Gelas yang muncul di dua eksperimen membawa ciri yang sama!</p>
             </HelpModal>
             <SecondaryButton onClick={() => nav("/hub")}>← Hub</SecondaryButton>
           </div>
@@ -187,7 +186,7 @@ export default function Module2() {
                   </div>
                   <p className="text-sm text-gray-500 mb-2">Centang hasil yang kamu amati:</p>
                   <div className="space-y-1">
-                    {FEATURES.slice(0, 4).map((f) => (
+                    {FEATURES.filter((f) => !f.includes("Air")).map((f) => (
                       <label key={f} className="flex items-center gap-2 text-sm">
                         <input type="checkbox" onChange={(e) => handleCheck(exp.id, f, e.target.checked)} /> {f}
                       </label>
@@ -206,7 +205,7 @@ export default function Module2() {
 
         <Card>
           <label className="block font-medium mb-1">Tuliskan alasan / penalaran logika kamu (min 20 karakter) *</label>
-          <textarea value={reasoningLocal} onChange={(e) => setReasoningLocal(e.target.value)} rows={4} className="w-full border-2 border-muted rounded-lg p-3 focus:border-accent outline-none" placeholder="Saya menemukan pola: gelas C muncul di EXP1 & EXP3 dengan kelopak berlapis..." />
+          <textarea value={reasoningLocal} onChange={(e) => setReasoningLocal(e.target.value)} rows={4} className="w-full border-2 border-muted rounded-lg p-3 focus:border-accent outline-none" placeholder="Saya menemukan pola: gelas C=Putih muncul di EXP1 & EXP3, gelas A=Ganda muncul di EXP1 & EXP2, jadi gelas D=Air..." />
           <Button onClick={save} className="w-full mt-3">Simpan Jawaban Modul 2</Button>
         </Card>
       </div>

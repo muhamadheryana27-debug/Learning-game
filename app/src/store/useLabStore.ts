@@ -56,22 +56,21 @@ export const useLabStore = create<LabStore>((set, get) => ({
     const { selectedBeakers, discoveredTraits } = get();
     if (selectedBeakers.length === 0) return;
 
+    // Revised mapping: A=double_petal, B=leaves, C=white_petal, D=water, E=black_center, F=wavy_stem
     const nextFlower: FlowerState = {
-      stemType: selectedBeakers.includes("D") ? "wavy" : "normal",
+      stemType: selectedBeakers.includes("F") ? "wavy" : "normal",
       hasLeaves: selectedBeakers.includes("B"),
-      petalLayers: selectedBeakers.includes("C") ? 2 : 1,
+      petalLayers: selectedBeakers.includes("A") ? 2 : 1,
       petalColor: selectedBeakers.includes("C") ? "white" : "default",
       centerColor: selectedBeakers.includes("E") ? "black" : "default",
     };
 
     const newTraits = new Set(discoveredTraits);
-    // Friendly Indonesian — no (Pupuk X) spoiler, detective notebook style
     if (nextFlower.hasLeaves) newTraits.add("🌿 Daunnya Tumbuh Lebat");
     if (nextFlower.petalLayers === 2) newTraits.add("🌸 Kelopak Jadi Berlapis (Ganda)");
     if (nextFlower.petalColor === "white") newTraits.add("⚪ Warna Kelopak Jadi Putih");
     if (nextFlower.stemType === "wavy") newTraits.add("〰️ Tangkai Batangnya Bergelombang");
     if (nextFlower.centerColor === "black") newTraits.add("⚫ Bagian Tengah Bunga Jadi Hitam");
-    // Plain water — no special trait: notebook will show neutral note in UI
 
     set({ isAnalyzing: true, animationPhase: "pouring" });
 

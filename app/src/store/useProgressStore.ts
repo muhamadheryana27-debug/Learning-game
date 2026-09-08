@@ -19,6 +19,8 @@ type ProgressState = {
   addDebuggingAttempt: () => void;
   setExperimentAnswer: (expId: number, features: string[]) => void;
   reset: () => void;
+  _hasHydrated: boolean;
+  _setHasHydrated: (v: boolean) => void;
 };
 
 const initial = {
@@ -37,6 +39,8 @@ export const useProgressStore = create<ProgressState>()(
   persist(
     (set) => ({
       ...initial,
+      _hasHydrated: false,
+      _setHasHydrated: (v) => set({ _hasHydrated: v }),
       setMod1Score: (v) => set({ mod1Score: v }),
       setMod2IntroCompleted: () => set({ mod2IntroCompleted: true }),
       setMod2: (assignments, score, waterCorrect) => set({ assignments, mod2Score: score, waterCorrect }),
@@ -47,6 +51,13 @@ export const useProgressStore = create<ProgressState>()(
         set((s) => ({ experimentAnswers: { ...s.experimentAnswers, [expId]: features } })),
       reset: () => set(initial),
     }),
-    { name: "vect-progress" },
+    {
+      name: "vect-progress",
+      onRehydrateStorage: () => (_state, error) => {
+        if (!error) {
+          useProgressStore.getState()._setHasHydrated(true);
+        }
+      },
+    },
   ),
 );
