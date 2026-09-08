@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { GLASS_PROPERTIES, FEATURES, EXPERIMENTS, verifyAll, scoreModule2, isWaterCorrect } from "../engine/rules/fertilizerEngine";
-import { HINTS, type HintLevel } from "../engine/hints/hintEngine";
+import { FEATURES, EXPERIMENTS, scoreModule2, isWaterCorrect } from "../engine/rules/fertilizerEngine";
 import { useProgressStore } from "../store/useProgressStore";
 import { Card } from "../components/shared/Card";
 import { Button, SecondaryButton } from "../components/shared/Button";
@@ -10,6 +9,7 @@ import { BeakerItem } from "../components/shared/BeakerItem";
 import { HelpModal } from "../components/shared/HelpModal";
 import { useLabStore, type FertilizerId } from "../store/useLabStore";
 import { toast } from "sonner";
+import { Module2DeductionBoard } from "../components/module2/Module2DeductionBoard";
 
 // Blind Test Mode: neutral tint only — no botanical hint in color/label
 const BEAKER_TINT = "#E0F2FE";
@@ -33,18 +33,16 @@ function propsFromGlasses(glasses: string[], assignments: Record<string, string>
 
 export default function Module2() {
   const nav = useNavigate();
-  const { setMod2, setReasoning, addHint, hintsUsed, addDebuggingAttempt, setExperimentAnswer, reasoning, assignments: saved } = useProgressStore();
+  const { setMod2, setReasoning, setExperimentAnswer, reasoning, assignments: saved, mod2IntroCompleted } = useProgressStore();
   const { selectedBeakers, addBeaker, removeBeaker, clearBeakers, currentFlowerState, animationPhase, isAnalyzing, evaluateMixture, discoveredTraits } =
     useLabStore();
   const [assignments, setAssignments] = useState<Record<string, string>>(saved);
   const [reasoningLocal, setReasoningLocal] = useState(reasoning);
   const [, setExpChecks] = useState<Record<number, string[]>>({});
-  const [hintOpen, setHintOpen] = useState(false);
-  const [verified, setVerified] = useState<ReturnType<typeof verifyAll> | null>(null);
 
-  const handleAssign = (glass: string, feature: string) => {
-    setAssignments((prev) => ({ ...prev, [glass]: feature }));
-  };
+  useEffect(() => {
+    if (!mod2IntroCompleted) nav("/module/2/intro", { replace: true });
+  }, [mod2IntroCompleted, nav]);
 
   const handleCheck = (expId: number, feature: string, checked: boolean) => {
     setExpChecks((prev) => {
@@ -53,13 +51,6 @@ export default function Module2() {
       setExperimentAnswer(expId, next);
       return { ...prev, [expId]: next };
     });
-  };
-
-  const requestHint = (lvl: HintLevel) => {
-    if (hintsUsed >= 3) { toast.error("Hint maksimal 3x"); return; }
-    addHint();
-    toast.info(`${HINTS[lvl].title}: ${HINTS[lvl].text} (-10%)`);
-    setHintOpen(false);
   };
 
   const save = () => {
@@ -73,13 +64,9 @@ export default function Module2() {
     nav("/hub");
   };
 
-  const verify = () => {
-    if (Object.keys(assignments).length < 6) { toast.error("Lengkapi assignment dulu"); return; }
-    const res = verifyAll(assignments);
-    setVerified(res);
-    const allMatch = res.every((r) => r.match);
-    if (!allMatch) addDebuggingAttempt();
-    toast[allMatch ? "success" : "warning"](allMatch ? "🏆 Semua MATCH ✓ — CASE SOLVED!" : "🔍 Ada yang belum cocok, cek hint");
+  const handleDeductionComplete = (deducedAssignments: Record<string, string>) => {
+    setAssignments(deducedAssignments);
+    toast.success("Deduksi selesai! Sekarang verifikasi dan simpan jawabanmu.");
   };
 
   return (
@@ -215,79 +202,7 @@ export default function Module2() {
           </div>
         </Card>
 
-        <Card>
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="font-bold">🧩 Drag & Drop — Sort the Evidence (klik pilih)</h2>
-            <button onClick={() => setHintOpen(!hintOpen)} className="bg-warning text-white px-4 py-2 rounded-pill text-sm">💡 Hint ({hintsUsed}/3)</button>
-          </div>
-          {hintOpen && (
-            <div className="grid md:grid-cols-3 gap-2 mb-3">
-              {([1, 2, 3] as HintLevel[]).map((lvl) => (
-                <button key={lvl} onClick={() => requestHint(lvl)} className="border p-3 rounded text-left hover:bg-amber-50">
-                  <div className="font-semibold text-sm">{HINTS[lvl].title}</div>
-                  <div className="text-xs text-gray-600">{HINTS[lvl].text.slice(0, 60)}...</div>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium mb-2">Gelas A–F → Pilih fitur:</p>
-              <div className="space-y-2">
-                {(["A", "B", "C", "D", "E", "F"] as const).map((g) => (
-                  <div key={g} className="flex items-center gap-2">
-                    <span className="w-12 font-bold">🧴 {g}</span>
-                    <select value={assignments[g] ?? ""} onChange={(e) => handleAssign(g, e.target.value)} className="flex-1 border rounded px-2 py-1">
-                      <option value="">— pilih fitur —</option>
-                      {FEATURES.map((f) => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                    {assignments[g] && <span className="text-sm">{assignments[g] === GLASS_PROPERTIES[g] ? "✨" : "🔍"}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-white border rounded-card p-3">
-              <p className="text-sm font-medium">Preview bunga dari hipotesis kamu</p>
-              <div className="flex justify-center gap-2 py-3 bg-muted/20 rounded-lg my-2">
-                {(["A", "B", "C"] as const).map((g) => {
-                  const p = assignments[g] ? propsFromGlasses([g], assignments) : null;
-                  return p ? (
-                    <div key={g} className="text-center">
-                      <FlowerSVG {...p} className="w-16 h-24" animate={false} />
-                      <div className="text-[10px]">Gelas {g}</div>
-                    </div>
-                  ) : null;
-                })}
-                {Object.keys(assignments).length === 0 && <span className="text-xs text-gray-400">Pilih gelas A–F untuk melihat preview</span>}
-              </div>
-              <ul className="text-xs text-gray-600 mt-1 space-y-0.5">
-                {Object.entries(GLASS_PROPERTIES).map(([k, v]) => <li key={k}>{k}: {v}</li>)}
-              </ul>
-              <Button onClick={verify} className="w-full mt-3">🔬 UJI SEMUA HIPOTESIS</Button>
-              {verified && (
-                <div className="mt-2 space-y-2 text-sm">
-                  <div className="flex gap-2 justify-center">
-                    {verified.map((r) => {
-                      const p = propsFromGlasses(r.glasses as string[], assignments);
-                      return (
-                        <div key={r.expId} className="text-center">
-                          <FlowerSVG {...p} className="w-14 h-20" animate />
-                          <div className={r.match ? "text-success text-xs" : "text-danger text-xs"}>EXP {r.expId} {r.match ? "✓" : "✗"}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {verified.map((r) => (
-                    <div key={r.expId} className={r.match ? "text-success" : "text-danger"}>
-                      EXP {r.expId}: {r.match ? "MATCH ✓" : `✗ predicted [${r.predicted.join(", ") || "-"}]`} • expected [{r.expected.join(", ")}]
-                    </div>
-                  ))}
-                  {verified.every((r) => r.match) && <div className="font-bold text-success">🏆 CASE SOLVED!</div>}
-                </div>
-              )}
-            </div>
-          </div>
-        </Card>
+        <Module2DeductionBoard onComplete={handleDeductionComplete} />
 
         <Card>
           <label className="block font-medium mb-1">Tuliskan alasan / penalaran logika kamu (min 20 karakter) *</label>
